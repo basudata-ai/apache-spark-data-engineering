@@ -1,0 +1,71 @@
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.6.1
+    container_name: cdc-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+
+  kafka:
+    image: confluentinc/cp-kafka:7.6.1
+    container_name: cdc-kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"          # your laptop (Spark) connects here
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      # INTERNAL = used by other containers (Debezium), EXTERNAL = used by your laptop
+      KAFKA_LISTENERS: INTERNAL://0.0.0.0:29092,EXTERNAL://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:29092,EXTERNAL://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    restart: on-failure
+
+  mysql:
+    image: mysql:8.0
+    container_name: cdc-mysql
+    ports:
+      - "3307:3306"          # laptop port 3307 -> MySQL inside container
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpw
+    # Turn on the binary log (the change log Debezium reads)
+    command: >
+      --server-id=223344
+      --log-bin=mysql-bin
+      --binlog-format=ROW
+      --binlog-row-image=FULL
+
+  connect:
+    image: quay.io/debezium/connect:2.7.3.Final
+    container_name: cdc-connect
+    depends_on:
+      - kafka
+      - mysql
+    ports:
+      - "8083:8083"          # Debezium / Kafka Connect REST API
+    environment:
+      BOOTSTRAP_SERVERS: kafka:29092
+      GROUP_ID: "1"
+      CONFIG_STORAGE_TOPIC: connect_configs
+      OFFSET_STORAGE_TOPIC: connect_offsets
+      STATUS_STORAGE_TOPIC: connect_statuses
+      CONFIG_STORAGE_REPLICATION_FACTOR: "1"
+      OFFSET_STORAGE_REPLICATION_FACTOR: "1"
+      STATUS_STORAGE_REPLICATION_FACTOR: "1"
+    restart: on-failure
+
+  postgres:
+    image: postgres:16
+    container_name: cdc-postgres
+    ports:
+      - "5433:5432"          # laptop port 5433 -> Postgres inside container
+    environment:
+      POSTGRES_USER: sink
+      POSTGRES_PASSWORD: sink
+      POSTGRES_DB: sinkdb

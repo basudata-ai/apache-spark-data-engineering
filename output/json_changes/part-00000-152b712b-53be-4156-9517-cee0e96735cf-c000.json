@@ -1,0 +1,2 @@
+{"op":"r","id":1,"name":"Asha","email":"asha@example.com","city":"Bengaluru","event_ts_ms":1791560635003,"kafka_partition":0,"kafka_offset":0}
+{"op":"r","id":2,"name":"Ravi","email":"ravi@example.com","city":"Mumbai","event_ts_ms":1791560635006,"kafka_partition":0,"kafka_offset":1}
